@@ -13,16 +13,16 @@ namespace ElektriTarbija
     internal class Program
     {
         //static String year, month, day;
-        static String http_request_responce;
 
         static int year, month, day, day_prev;
         static String s_year, s_month, s_day, s_day_prev;
 
         static Uri request_destination_link;
-        static int cur_index;
+        static int line_index, cur_index;
 
         // Requested data
         static float[] hourly_price_array = new float[24];  // Stores the current day power prices. Begins from index 0 and indicates the current hour/index price
+        static String http_request_responce;
 
         static void get_date_time()
         {
@@ -86,31 +86,33 @@ namespace ElektriTarbija
 
             // Get data if request was successful, otherwise return
             if (status_code != 200) return -1;
-            http_request_responce = response_message.Content.ReadAsStringAsync().Result.ToString();
-
+            http_request_responce = response_message.Content.ReadAsStringAsync().Result;
+            
             return 1;
         }
-
-        static void sort_incoming_data(String http_request_responce)
+        
+        static void sort_incoming_data(String data_stream)
         {
             // Split all data to a list
             String[] split_data = http_request_responce.Split(';');
 
+
+
             Console.WriteLine("Todays Power Prices Are The Following:");
-            
-            // Loop thru the list, find the price data by searching for a comma (Only price contains a comma)
+
+            // Loop thru the list, find the price data
             // Remove everything other than the price and replace the comma with a dot
             // Add it to a list and integrate index
-            foreach (String raw_data in split_data)
+            foreach (String line in split_data)
             {
-                if (raw_data.Contains(","))
+                if (line_index % 2 == 0 && line_index > 3)
                 {
                     // Format the string to be convertable into a float
-                    String data = raw_data;
-                    data = data.Remove(data.IndexOf('\"', data.IndexOf(",")), data.Length - data.IndexOf('\"', data.IndexOf(","))); // Removes last {"} and everything after that
-                    data = data.Remove(data.IndexOf('\"'), 1);  // Removes the first {"}
+                    String data = line;
+                    data = data.Remove(data.IndexOf('\"'), 1);
+                    data = data.Remove(data.IndexOf('\"'), data.Length -  data.IndexOf('\"'));
                     data = data.Replace(',', '.');  // Replaces the {,} with {.}
-
+                    
                     // Convert the price from a string to a float and put it in the array
                     float current_hour_price = (float) Convert.ToDouble(data, CultureInfo.InvariantCulture);
                     hourly_price_array[cur_index] = current_hour_price;
@@ -118,29 +120,32 @@ namespace ElektriTarbija
                     // Print out the price
                     Console.Write($"{cur_index} - {cur_index+1}: ");
                     Console.WriteLine(current_hour_price);
-
                     cur_index++;
                 }
+                line_index++;
             }
         }
 
-        static float sum, average, lowest_usage_price;
+        static double sum, average, lowest_usage_price;
         static int lowest_power_price_timestamp;
-        static int calculate_optimal_power_usage_time_duration(int usage_duration)
+        // Takes in 
+        // usage_duration - How long is the user planning to use power for
+        // max_power_price - If the power price is higher than the given value -1 will be returned. To disable this, put -1 in there
+        static int calculate_optimal_power_usage_time_duration(int usage_duration, float max_power_price = -1)
         {
-            float[] usage_duration_average_price = new float[24];   // This stores the average power price during a {usage_duration} period
+            double[] usage_duration_average_price = new double[24];   // This stores the average power price during a {usage_duration} period
 
             // Calculate the average power price over the usage duration
-            for (int i = 0; i < usage_duration_average_price.Length - usage_duration; i++)
+            for (int i = 0; i < usage_duration_average_price.Length - usage_duration + 1; i++)
             {
                 // Beginning from time {i} add each hour of usage price into the sum variable
                 for (int j = 0; j < usage_duration; j++)
                 {
-                    sum += (float) hourly_price_array[i + j];
+                    sum += (double) hourly_price_array[i + j];
                 }
 
                 // Calculate the average power price over usage duration
-                average = (float) sum / usage_duration;
+                average = (double) (sum / usage_duration);
                 
                 usage_duration_average_price[i] = average;
 
@@ -152,8 +157,9 @@ namespace ElektriTarbija
             lowest_usage_price = 1000000;
 
             // Find the lowest power price for the usage duration in the currenty day
-            for (int i = 0; i < usage_duration_average_price.Length - usage_duration; i++)
+            for (int i = 0; i < usage_duration_average_price.Length - usage_duration + 1; i++)
             {
+                //Console.WriteLine($"Average: {i} - {i+1}: {usage_duration_average_price[i]}"); Debug
                 if (lowest_usage_price > usage_duration_average_price[i])
                 {
                     lowest_usage_price = usage_duration_average_price[i];
@@ -175,7 +181,7 @@ namespace ElektriTarbija
             Console.WriteLine("How many hours straight would you like to consume power for?");
             int result = Convert.ToInt32(Console.ReadLine());
 
-            Console.WriteLine($"The best time to consume {result} hours of power for is starting from {calculate_optimal_power_usage_time_duration(result) + 1}");
+            Console.WriteLine($"The best time to consume {result} hours of power for is starting from {calculate_optimal_power_usage_time_duration(result)}");
         }
     }
 }
