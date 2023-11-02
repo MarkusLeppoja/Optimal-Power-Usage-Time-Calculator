@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Threading.Tasks;
 
 namespace ElektriTarbija
 {
@@ -131,12 +127,12 @@ namespace ElektriTarbija
         // Takes in 
         // usage_duration - How long is the user planning to use power for
         // max_power_price - If the power price is higher than the given value -1 will be returned. To disable this, put -1 in there
-        static int calculate_optimal_power_usage_time_duration(int usage_duration, float max_power_price = -1)
+        static int calculate_optimal_power_usage_time_duration(int usage_duration, int current_time = 0, float max_power_price = -1) //todo
         {
             double[] usage_duration_average_price = new double[24];   // This stores the average power price during a {usage_duration} period
 
             // Calculate the average power price over the usage duration
-            for (int i = 0; i < usage_duration_average_price.Length - usage_duration + 1; i++)
+            for (int i = current_time; i < usage_duration_average_price.Length - usage_duration + 1; i++)
             {
                 // Beginning from time {i} add each hour of usage price into the sum variable
                 for (int j = 0; j < usage_duration; j++)
@@ -157,7 +153,7 @@ namespace ElektriTarbija
             lowest_usage_price = 1000000;
 
             // Find the lowest power price for the usage duration in the currenty day
-            for (int i = 0; i < usage_duration_average_price.Length - usage_duration + 1; i++)
+            for (int i = current_time; i < usage_duration_average_price.Length - usage_duration + 1; i++)
             {
                 //Console.WriteLine($"Average: {i} - {i+1}: {usage_duration_average_price[i]}"); Debug
                 if (lowest_usage_price > usage_duration_average_price[i])
@@ -167,21 +163,43 @@ namespace ElektriTarbija
                 }
             }
 
+            // If the cheapest possible price is higher than the maximum price return -1 (Couldn't find a suitable time
+            if (usage_duration_average_price[lowest_power_price_timestamp] >= max_power_price && max_power_price != -1) lowest_power_price_timestamp = -1;
+
             // Return the beginning time of the lowest average power price for the usage duration
             return lowest_power_price_timestamp;
         }
 
-        static void Main(string[] args)
+        static void get_current_day_power_data()
         {
             get_date_time();
             create_request_string();
             execute_request(request_destination_link);
             sort_incoming_data(http_request_responce);
+        }
 
-            Console.WriteLine("How many hours straight would you like to consume power for?");
-            int result = Convert.ToInt32(Console.ReadLine());
+        static void Main(string[] args)
+        {
+            get_current_day_power_data(); // Get API data and sort it
 
-            Console.WriteLine($"The best time to consume {result} hours of power for is starting from {calculate_optimal_power_usage_time_duration(result)}");
+            while(true)
+            {
+                Console.WriteLine("How many hours straight would you like to consume power for?");
+                int input_duration = Convert.ToInt32(Console.ReadLine());
+
+                if (input_duration > 0 && input_duration < 24 - DateTime.Now.Hour)
+                {
+                    int optimal_usage_time = calculate_optimal_power_usage_time_duration(input_duration, 7);
+
+                    // Anlysise the price, if the returned value is -1 print out that there is no power consumtion time enlisiting user specifified requirements
+                    Console.WriteLine($"The best time to consume {input_duration} hours of power for is starting from {optimal_usage_time}");
+                }
+                else
+                {
+                    Console.WriteLine("User enterd an incorrect value. Please try again!");
+                }
+            }
+
         }
     }
 }
